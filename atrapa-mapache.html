@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atrapa al Mapache</title>
+<meta name="description" content="Juego de reflejos: atrapa al mapache antes de que se escape, encadena combos y esquiva al zorrillo.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦝</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@600;800;900&display=swap">
+<style>
+:root{
+  --suelo:#e4ecd9; --selva:#2f5d3a; --tinta:#1d2a20; --suave:#5b6b5e; --acento:#e07a1f; --campo:#cfdcc0;
+  --campo-2:#bfd0ae; --tarjeta:#fffdf6; --borde:#c3d1b5; --peligro:#c8412b; --oro:#d99a00; --azul:#2f7fc4;
+  --velo:rgba(228,236,217,.72); --sombra:0 10px 30px rgba(29,42,32,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ color-scheme:dark;
+    --suelo:#121a14; --selva:#8fc79b; --tinta:#e6efe6; --suave:#9aab9d; --acento:#f0953d; --campo:#1d2a20;
+    --campo-2:#243427; --tarjeta:#19241b; --borde:#2d3f30; --peligro:#ff7a5c; --oro:#ffc83d; --azul:#6db3ee;
+    --velo:rgba(18,26,20,.72); --sombra:0 10px 30px rgba(0,0,0,.45); }
+}
+:root[data-theme="dark"]{ color-scheme:dark;
+  --suelo:#121a14; --selva:#8fc79b; --tinta:#e6efe6; --suave:#9aab9d; --acento:#f0953d; --campo:#1d2a20;
+  --campo-2:#243427; --tarjeta:#19241b; --borde:#2d3f30; --peligro:#ff7a5c; --oro:#ffc83d; --azul:#6db3ee;
+  --velo:rgba(18,26,20,.72); --sombra:0 10px 30px rgba(0,0,0,.45); }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--suelo);color:var(--tinta);font-family:"Nunito",system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 16px;min-height:100dvh;
+  -webkit-tap-highlight-color:transparent;overflow-x:hidden}
+button{font:inherit;color:inherit}
+
+/* ---------- Cabecera ---------- */
+.cabecera{width:100%;max-width:720px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:"Bangers","Impact",sans-serif;font-weight:400;letter-spacing:.04em;color:var(--selva);
+  font-size:clamp(28px,6.5vw,44px);margin:0;line-height:1}
+.iconos{display:flex;gap:8px}
+.icono{width:42px;height:42px;border-radius:12px;border:2px solid var(--borde);background:var(--tarjeta);
+  font-size:18px;cursor:pointer;display:grid;place-items:center;transition:transform .1s}
+.icono:active{transform:scale(.92)}
+.icono:disabled{opacity:.4;cursor:default}
+.icono:focus-visible,.boton:focus-visible,.ent:focus-visible{outline:3px solid var(--acento);outline-offset:3px}
+
+/* ---------- Marcador ---------- */
+.hud{width:100%;max-width:720px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:var(--tarjeta);border:2px solid var(--borde);border-radius:12px;padding:6px 8px;text-align:center;min-width:0}
+.stat span{display:block;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--suave)}
+.stat b{display:inline-block;font-weight:900;font-size:clamp(18px,4.6vw,24px);font-variant-numeric:tabular-nums;line-height:1.2}
+#puntos{color:var(--acento)}
+.salta{animation:salta .22s ease-out}
+@keyframes salta{40%{transform:scale(1.3)}}
+.pips{display:flex;justify-content:center;gap:3px;margin-top:2px}
+.pips i{width:8px;height:4px;border-radius:2px;background:var(--borde)}
+.pips i.on{background:var(--acento)}
+.stat.urgente{border-color:var(--peligro)}
+.stat.urgente b{color:var(--peligro);animation:late .5s ease-in-out infinite alternate}
+.barra-tiempo{width:100%;max-width:720px;height:8px;border-radius:99px;background:var(--campo-2);overflow:hidden}
+#relleno{height:100%;background:var(--selva);transform-origin:left;border-radius:99px}
+.urgente-barra #relleno{background:var(--peligro)}
+
+/* ---------- Campo ---------- */
+#campo{position:relative;width:100%;max-width:720px;flex:1;min-height:320px;max-height:560px;border-radius:18px;overflow:hidden;
+  background:
+    radial-gradient(circle at 30% 40%,rgba(255,255,255,.14) 0 1.5px,transparent 2.5px) 0 0/26px 26px,
+    radial-gradient(circle at 70% 80%,rgba(0,0,0,.06) 0 2px,transparent 3px) 0 0/34px 34px,
+    var(--campo);
+  box-shadow:inset 0 0 0 2px var(--borde),inset 0 -40px 80px rgba(0,0,0,.06);
+  touch-action:none;user-select:none;-webkit-user-select:none}
+#campo.en-juego{cursor:crosshair}
+#deco,#zona,#fx{position:absolute;inset:0}
+#deco{pointer-events:none}
+#deco span{position:absolute;opacity:.45;filter:saturate(.75)}
+#fx{pointer-events:none;z-index:2}
+#campo.tiembla{animation:tiembla .28s}
+@keyframes tiembla{20%{transform:translateX(-6px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+.pausado #zona .ent{visibility:hidden}
+
+/* ---------- Criaturas ---------- */
+.ent{position:absolute;left:0;top:0;width:var(--s);height:var(--s);padding:0;border:0;background:none;cursor:pointer;
+  border-radius:50%;display:grid;place-items:center;will-change:transform;touch-action:none;z-index:1}
+.ent::after{content:"";position:absolute;inset:-10px;border-radius:50%} /* área táctil ampliada */
+.ent::before{content:"";position:absolute;inset:-5px;border-radius:50%;
+  background:conic-gradient(var(--anillo) calc(var(--t,1)*1turn),color-mix(in srgb,var(--anillo) 16%,transparent) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));
+  transition:opacity .15s}
+.ent.mapache{--anillo:var(--acento)}
+.ent.dorado{--anillo:var(--oro)}
+.ent.zorrillo{--anillo:#8b5cc4}
+.ent.reloj{--anillo:var(--azul)}
+.cuerpo{position:relative;display:grid;place-items:center}
+.sprite{font-size:calc(var(--s)*.8);line-height:1;display:block;
+  animation:aparece .28s cubic-bezier(.3,1.7,.5,1) both;filter:drop-shadow(0 4px 0 rgba(0,0,0,.18))}
+.dorado .sprite{filter:sepia(.9) saturate(3) hue-rotate(-8deg) brightness(1.1) drop-shadow(0 0 8px rgba(255,200,40,.9))}
+.brillo{position:absolute;top:-10%;right:-18%;font-size:calc(var(--s)*.34);animation:centella .6s ease-in-out infinite alternate}
+.nervioso .cuerpo{animation:nervios .12s linear infinite alternate}
+.fuera{pointer-events:none}
+.fuera::before{opacity:0}
+.atrapado .sprite{animation:atrapado .26s ease-in forwards}
+.huye .sprite{animation:huye .35s ease-in forwards}
+.desvanece .sprite{animation:desvanece .3s ease-in forwards}
+.fuera .brillo{display:none}
+@keyframes aparece{0%{transform:translateY(35%) scale(0)}70%{transform:translateY(0) scale(1.15)}100%{transform:scale(1)}}
+@keyframes atrapado{0%{transform:scale(1)}35%{transform:scale(1.35,.7)}100%{transform:scale(0) rotate(-35deg);opacity:0}}
+@keyframes huye{to{transform:translateY(-70%) scale(.3);opacity:0}}
+@keyframes desvanece{to{transform:scale(.4);opacity:0}}
+@keyframes nervios{from{transform:rotate(-8deg)}to{transform:rotate(8deg)}}
+@keyframes centella{from{transform:scale(.7) rotate(-15deg);opacity:.6}to{transform:scale(1.1) rotate(15deg);opacity:1}}
+
+/* ---------- Efectos ---------- */
+.flota{position:absolute;transform:translate(-50%,-50%);font-weight:900;font-size:20px;white-space:nowrap;color:var(--tinta);
+  text-shadow:0 2px 0 var(--tarjeta),0 0 6px var(--tarjeta);animation:flota .9s ease-out forwards}
+.flota.oro{color:var(--oro);font-size:24px}
+.flota.tiempo{color:var(--azul)}
+.flota.mal{color:var(--peligro)}
+.flota.chico{font-size:15px}
+.flota.combo{font-family:"Bangers","Impact",sans-serif;font-weight:400;letter-spacing:.04em;font-size:30px;color:var(--acento)}
+.flota.banner{font-family:"Bangers","Impact",sans-serif;font-weight:400;letter-spacing:.05em;font-size:clamp(40px,10vw,64px);
+  color:var(--selva);text-align:center;line-height:1;animation:banner 1.4s ease-out forwards}
+.flota.banner small{display:block;font-family:"Nunito",sans-serif;font-weight:900;font-size:16px;letter-spacing:0;color:var(--tinta);margin-top:6px}
+@keyframes flota{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}15%{transform:translate(-50%,-60%) scale(1.1);opacity:1}
+  100%{transform:translate(-50%,-190%) scale(1);opacity:0}}
+@keyframes banner{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}15%{transform:translate(-50%,-50%) scale(1.08);opacity:1}
+  25%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{transform:translate(-50%,-70%);opacity:0}}
+.chispa{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:var(--acento);
+  animation:chispa .55s ease-out forwards}
+.chispa.hoja{background:var(--selva);border-radius:0 60% 0 60%}
+.chispa.oro{background:var(--oro)}
+.chispa.azul{background:var(--azul)}
+@keyframes chispa{to{transform:translate(var(--dx),var(--dy)) scale(0) rotate(200deg);opacity:.2}}
+.humo{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(120,170,60,.55);filter:blur(4px);
+  animation:humo .8s ease-out forwards}
+@keyframes humo{0%{transform:translate(0,0) scale(.3);opacity:.9}100%{transform:translate(var(--dx),var(--dy)) scale(1.8);opacity:0}}
+.confeti{position:absolute;top:-16px;width:9px;height:14px;z-index:5;pointer-events:none;border-radius:2px;
+  animation:cae var(--dur) cubic-bezier(.3,.6,.6,1) forwards}
+@keyframes cae{to{transform:translate(var(--dx),var(--caida)) rotate(720deg)}}
+
+/* ---------- Cuenta regresiva y paneles ---------- */
+#cuenta{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;
+  font-family:"Bangers","Impact",sans-serif;font-size:clamp(72px,20vw,120px);color:var(--acento);
+  text-shadow:0 5px 0 var(--tarjeta)}
+#cuenta.late{animation:cuenta .6s ease-out}
+@keyframes cuenta{0%{transform:translate(-50%,-50%) scale(1.8);opacity:0}30%{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes late{to{transform:scale(1.15)}}
+#aviso{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;padding:16px;
+  background:var(--velo);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);overflow:auto}
+.p{width:100%;max-width:420px;background:var(--tarjeta);border:2px solid var(--borde);border-radius:18px;box-shadow:var(--sombra);
+  padding:20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px;animation:entra .3s cubic-bezier(.3,1.5,.5,1)}
+@keyframes entra{from{transform:translateY(16px) scale(.96);opacity:0}}
+.p h2{font-family:"Bangers","Impact",sans-serif;font-weight:400;letter-spacing:.04em;font-size:clamp(30px,8vw,40px);margin:0;line-height:1.05;
+  color:var(--selva);text-wrap:balance}
+.p p{margin:0;color:var(--suave);font-size:15px;line-height:1.4;text-wrap:pretty}
+.p p strong{color:var(--tinta)}
+.leyenda{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+.leyenda li{display:flex;align-items:center;gap:8px;background:var(--suelo);border-radius:10px;padding:6px 8px;font-size:13px;font-weight:800;text-align:left}
+.leyenda .e{font-size:24px;line-height:1;flex:none}
+.leyenda .e.oro{filter:sepia(.9) saturate(3) hue-rotate(-8deg) brightness(1.1)}
+.leyenda small{display:block;font-weight:600;color:var(--suave);font-size:12px}
+.boton{font-weight:900;font-size:19px;background:var(--acento);color:#fff;border:0;border-radius:999px;padding:13px 34px;cursor:pointer;
+  box-shadow:0 4px 0 color-mix(in srgb,var(--acento) 60%,#000);transition:transform .08s,box-shadow .08s}
+.boton:active{transform:translateY(3px);box-shadow:0 1px 0 color-mix(in srgb,var(--acento) 60%,#000)}
+.boton:disabled{opacity:.55;cursor:default}
+.nota{font-size:12px!important}
+kbd{font:800 11px "Nunito",sans-serif;border:1.5px solid var(--borde);border-bottom-width:3px;border-radius:5px;padding:0 5px;color:var(--tinta)}
+.gran-puntaje{font-family:"Bangers","Impact",sans-serif;font-size:clamp(56px,16vw,76px);line-height:.9;color:var(--acento)}
+.gran-puntaje small{display:block;font-family:"Nunito",sans-serif;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--suave)}
+.rango{font-weight:900;font-size:17px}
+.sello{background:var(--oro);color:#1d2a20;font-weight:900;font-size:13px;letter-spacing:.06em;text-transform:uppercase;
+  padding:4px 12px;border-radius:99px;animation:late .45s ease-in-out infinite alternate}
+.resumen{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
+.resumen div{background:var(--suelo);border-radius:10px;padding:8px 4px}
+.resumen b{display:block;font-size:20px;font-weight:900;font-variant-numeric:tabular-nums}
+.resumen span{font-size:11px;font-weight:800;color:var(--suave);text-transform:uppercase;letter-spacing:.04em}
+.pie{margin:0;font-size:13px;color:var(--suave);text-align:center;max-width:720px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+@media (max-width:420px){
+  .leyenda{grid-template-columns:1fr}
+  .resumen{grid-template-columns:repeat(2,1fr)}
+  .p{padding:16px;gap:10px}
+}
+@media (prefers-reduced-motion: reduce){
+  #campo.tiembla,.nervioso .cuerpo,.stat.urgente b,.sello,.brillo{animation:none}
+  .chispa,.confeti{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="cabecera">
+  <h1>Atrapa al Mapache</h1>
+  <div class="iconos">
+    <button class="icono" id="pausa" type="button" aria-label="Pausar" title="Pausar (P)" disabled>⏸</button>
+    <button class="icono" id="sonido" type="button" aria-label="Sonido" aria-pressed="true" title="Sonido">🔊</button>
+  </div>
+</header>
+
+<div class="hud">
+  <div class="stat"><span>Puntos</span><b id="puntos">0</b></div>
+  <div class="stat"><span>Combo</span><b id="mult">x1</b><div class="pips" id="pips"><i></i><i></i><i></i><i></i><i></i></div></div>
+  <div class="stat"><span>Nivel</span><b id="nivel">1</b></div>
+  <div class="stat" id="stat-tiempo"><span>Tiempo</span><b id="tiempo">30</b></div>
+</div>
+<div class="barra-tiempo" id="barra" aria-hidden="true"><div id="relleno"></div></div>
+
+<main id="campo">
+  <div id="deco" aria-hidden="true"></div>
+  <div id="zona"></div>
+  <div id="fx" aria-hidden="true"></div>
+  <div id="cuenta" aria-hidden="true" hidden></div>
+  <div id="aviso">
+    <section class="p" data-p="inicio">
+      <h2>¡Atrapa al mapache!</h2>
+      <p>Tócalo antes de que se <strong>escape</strong>: el anillo muestra cuánto le queda. Cada vez que lo atrapas salta a otro lugar. Tienes <strong>30 segundos</strong>.</p>
+      <ul class="leyenda">
+        <li><span class="e">🦝</span><span>+10 pts<small>× tu combo</small></span></li>
+        <li><span class="e oro">🦝</span><span>Dorado +50<small>y +2 segundos</small></span></li>
+        <li><span class="e">⏱️</span><span>Reloj<small>+3 segundos</small></span></li>
+        <li><span class="e">🦨</span><span>¡No lo toques!<small>−3 segundos</small></span></li>
+      </ul>
+      <p class="nota">Cinco seguidos suben el multiplicador. Tocar el pasto o dejarlo escapar rompe el combo.</p>
+      <button class="boton" id="jugar" type="button">Jugar</button>
+      <p class="nota" id="i-record"></p>
+    </section>
+    <section class="p" data-p="pausa" hidden>
+      <h2>Pausa</h2>
+      <p>El bosque te espera. El tiempo está detenido.</p>
+      <button class="boton" id="seguir" type="button">Seguir</button>
+      <p class="nota"><kbd>P</kbd> o <kbd>Esc</kbd> para pausar y seguir</p>
+    </section>
+    <section class="p" data-p="fin" hidden>
+      <span class="sello" id="f-sello" hidden>¡Nuevo récord!</span>
+      <div class="gran-puntaje"><span id="f-puntos">0</span><small>puntos</small></div>
+      <div class="rango" id="f-rango"></div>
+      <div class="resumen">
+        <div><b id="f-atrapados">0</b><span>Mapaches</span></div>
+        <div><b id="f-precision">0%</b><span>Precisión</span></div>
+        <div><b id="f-combo">0</b><span>Mejor racha</span></div>
+        <div><b id="f-nivel">1</b><span>Nivel</span></div>
+      </div>
+      <p id="f-detalle"></p>
+      <button class="boton" id="otra" type="button">Otra vez</button>
+      <p class="nota" id="f-record"></p>
+    </section>
+  </div>
+</main>
+
+<p class="pie">Consejo: un toque rápido (⚡) da puntos extra. Desde el nivel 4, los mapaches corren.</p>
+<div class="sr" aria-live="polite" id="anuncio"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const campo=$("campo"),zona=$("zona"),fx=$("fx"),deco=$("deco"),cuenta=$("cuenta"),aviso=$("aviso");
+const pips=[...$("pips").children];
+const TOTAL=30000,POR_NIVEL=8,NIVEL_MAX=10;
+const poco=matchMedia("(prefers-reduced-motion: reduce)");
+const azar=(a,b)=>a+Math.random()*(b-a);
+const leer=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}};
+const guardar=(k,v)=>{try{localStorage.setItem(k,String(v))}catch(e){}};
+
+let record=+leer("mapache.record",0)||0;
+let sonidoOn=leer("mapache.sonido","1")!=="0";
+const J={estado:"inicio",puntos:0,combo:0,nivel:1,restante:TOTAL};
+const ents=new Set(),porEl=new WeakMap();
+
+/* ---------- Sonido (sintetizado, sin archivos) ---------- */
+let actx=null;
+function audio(){
+  if(!actx){try{actx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){return null}}
+  if(actx.state==="suspended")actx.resume();
+  return actx;
+}
+function tono(f,dur,{tipo="square",vol=.05,a=0,f2=0}={}){
+  const c=audio();if(!c)return;
+  const t=c.currentTime+a,o=c.createOscillator(),g=c.createGain();
+  o.type=tipo;o.frequency.setValueAtTime(f,t);
+  if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+dur);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur+.03);
+}
+const arpegio=(fs,paso,op)=>fs.forEach((f,i)=>tono(f,paso*1.6,{...op,a:i*paso}));
+const SONIDOS={
+  golpe:c=>{const f=440*Math.pow(2,Math.min(c,16)/12);tono(f,.09,{f2:f*1.5,vol:.04})},
+  dorado:()=>arpegio([660,880,1320,1760],.05,{tipo:"triangle",vol:.07}),
+  combo:()=>arpegio([523,784,1046],.06,{tipo:"triangle",vol:.06}),
+  fallo:()=>tono(170,.14,{tipo:"triangle",f2:70,vol:.1}),
+  escapa:()=>tono(520,.18,{tipo:"triangle",f2:200,vol:.06}),
+  zorrillo:()=>{tono(130,.35,{tipo:"sawtooth",f2:55,vol:.05});tono(138,.35,{tipo:"sawtooth",f2:58,vol:.04})},
+  reloj:()=>{tono(990,.07,{tipo:"sine",vol:.08});tono(1320,.12,{tipo:"sine",vol:.08,a:.08})},
+  tic:()=>tono(1250,.035,{tipo:"sine",vol:.06}),
+  cuenta:()=>tono(520,.12,{tipo:"sine",vol:.08}),
+  ya:()=>tono(1040,.3,{tipo:"sine",vol:.09}),
+  nivel:()=>arpegio([392,523,659,784],.07,{tipo:"triangle",vol:.07}),
+  fin:()=>arpegio([784,659,523,392],.12,{tipo:"triangle",vol:.07}),
+  record:()=>arpegio([523,659,784,1046,784,1046,1318],.09,{tipo:"triangle",vol:.07})
+};
+function sonar(n,x){if(sonidoOn&&SONIDOS[n])try{SONIDOS[n](x)}catch(e){}}
+function vibrar(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+function pintarSonido(){
+  $("sonido").textContent=sonidoOn?"🔊":"🔇";
+  $("sonido").setAttribute("aria-pressed",sonidoOn);
+  $("sonido").setAttribute("aria-label",sonidoOn?"Silenciar":"Activar sonido");
+}
+
+/* ---------- Dificultad por nivel ---------- */
+const vidaMapache=n=>Math.max(650,1900-(n-1)*140);
+const tamMapache=n=>Math.max(44,78-(n-1)*4);
+const velMapache=n=>n<4?0:Math.min(160,40+(n-4)*22);
+const mult=()=>Math.min(5,1+Math.floor(J.combo/5));
+const MENSAJE_NIVEL={2:"¡Cuidado con el zorrillo!",4:"¡Ahora corren!",7:"¡Modo experto!"};
+const RANGOS=[[2200,"Leyenda del bosque 👑"],[1300,"Cazamapaches experto"],[650,"Guardabosques"],[250,"Explorador curioso"],[0,"Turista despistado"]];
+
+/* ---------- Criaturas ---------- */
+const EMOJI={mapache:"🦝",dorado:"🦝",zorrillo:"🦨",reloj:"⏱️"};
+const ETIQUETA={mapache:"Mapache",dorado:"Mapache dorado",zorrillo:"Zorrillo, no lo toques",reloj:"Reloj, más tiempo"};
+const centro=e=>({x:e.x+e.tam/2,y:e.y+e.tam/2});
+
+function lugar(tam){
+  const W=zona.clientWidth,H=zona.clientHeight,m=10;
+  const maxX=Math.max(0,W-tam-2*m),maxY=Math.max(0,H-tam-2*m),lejos=Math.min(W,H)*.35;
+  let mejor=null,mejorD=-1;
+  for(let i=0;i<24;i++){
+    const x=m+Math.random()*maxX,y=m+Math.random()*maxY,cx=x+tam/2,cy=y+tam/2;
+    let d=Infinity;
+    if(J.ultimo)d=Math.hypot(cx-J.ultimo.x,cy-J.ultimo.y)/lejos;
+    for(const e of ents){const c=centro(e);d=Math.min(d,Math.hypot(cx-c.x,cy-c.y)/((tam+e.tam)*.75))}
+    if(d>=1)return{x,y};
+    if(d>mejorD){mejorD=d;mejor={x,y}}
+  }
+  return mejor;
+}
+function crear(tipo,vida,tam){
+  const el=document.createElement("button");
+  el.type="button";el.className="ent "+tipo;el.setAttribute("aria-label",ETIQUETA[tipo]);
+  el.innerHTML='<span class="cuerpo"><span class="sprite" aria-hidden="true">'+EMOJI[tipo]+"</span>"+
+    (tipo==="dorado"?'<span class="brillo" aria-hidden="true">✨</span>':"")+"</span>";
+  el.style.setProperty("--s",tam+"px");
+  const p=lugar(tam),e={el,tipo,tam,x:p.x,y:p.y,vx:0,vy:0,nace:J.t,vida};
+  el.style.transform=`translate(${e.x}px,${e.y}px)`;
+  porEl.set(el,e);ents.add(e);zona.appendChild(el);
+  return e;
+}
+function nuevoMapache(){
+  const n=J.nivel,dorado=J.atrapados>2&&Math.random()<Math.min(.15,.06+n*.01);
+  const e=crear(dorado?"dorado":"mapache",vidaMapache(n)*(dorado?.8:1),tamMapache(n));
+  const v=velMapache(n);
+  if(v){const a=Math.random()*Math.PI*2;e.vx=Math.cos(a)*v;e.vy=Math.sin(a)*v}
+  if(J.teclado)e.el.focus({preventScroll:true});
+}
+function quitar(e,clase){
+  ents.delete(e);e.el.classList.add("fuera",clase);e.el.tabIndex=-1;
+  setTimeout(()=>e.el.remove(),400);
+}
+function limpiar(){for(const e of [...ents])quitar(e,"desvanece")}
+
+/* ---------- Efectos ---------- */
+function flotante(html,{x,y},clase=""){
+  const s=document.createElement("span"),W=fx.clientWidth;
+  s.className="flota "+clase;s.innerHTML=html;
+  s.style.left=Math.min(W-50,Math.max(50,x))+"px";s.style.top=Math.max(24,y)+"px";
+  fx.appendChild(s);setTimeout(()=>s.remove(),clase.includes("banner")?1450:950);
+}
+function chispas({x,y},tipo=""){
+  if(poco.matches)return;
+  for(let i=0;i<12;i++){
+    const s=document.createElement("span"),a=Math.random()*Math.PI*2,r=azar(35,85);
+    s.className="chispa "+(tipo||(i%3?"":"hoja"));
+    s.style.left=x+"px";s.style.top=y+"px";
+    s.style.setProperty("--dx",Math.cos(a)*r+"px");s.style.setProperty("--dy",Math.sin(a)*r+"px");
+    fx.appendChild(s);setTimeout(()=>s.remove(),600);
+  }
+}
+function nube({x,y}){
+  for(let i=0;i<7;i++){
+    const s=document.createElement("span"),a=Math.random()*Math.PI*2,r=azar(10,45);
+    s.className="humo";s.style.left=x+"px";s.style.top=y+"px";
+    s.style.setProperty("--dx",Math.cos(a)*r+"px");s.style.setProperty("--dy",Math.sin(a)*r-15+"px");
+    fx.appendChild(s);setTimeout(()=>s.remove(),850);
+  }
+}
+function confeti(){
+  if(poco.matches)return;
+  const colores=["#e07a1f","#2f5d3a","#ffc83d","#6db3ee","#c8412b","#8fc79b"],H=campo.clientHeight;
+  for(let i=0;i<50;i++){
+    const s=document.createElement("span"),d=azar(1.6,2.8);
+    s.className="confeti";s.style.left=azar(0,100)+"%";s.style.background=colores[i%colores.length];
+    s.style.setProperty("--dx",azar(-60,60)+"px");s.style.setProperty("--caida",H+40+"px");
+    s.style.setProperty("--dur",d+"s");s.style.animationDelay=azar(0,.5)+"s";
+    campo.appendChild(s);setTimeout(()=>s.remove(),(d+.6)*1000);
+  }
+}
+function reanimar(el,clase){el.classList.remove(clase);void el.offsetWidth;el.classList.add(clase)}
+function temblar(){if(!poco.matches)reanimar(campo,"tiembla")}
+function anunciar(t){$("anuncio").textContent=t}
+function decorar(){
+  const plantas=["🌿","🌱","🍄","🌼","🌾","🌿","🍂"],n=Math.round(campo.clientWidth*campo.clientHeight/20000)+5;
+  deco.innerHTML="";
+  for(let i=0;i<n;i++){
+    const s=document.createElement("span");
+    s.textContent=plantas[i%plantas.length];
+    s.style.left=azar(2,92)+"%";s.style.top=azar(2,90)+"%";s.style.fontSize=azar(16,32)+"px";
+    s.style.transform=`rotate(${azar(-20,20)}deg)`;
+    deco.appendChild(s);
+  }
+}
+
+/* ---------- Marcador ---------- */
+function hud(){
+  const p=$("puntos");
+  if(p.textContent!==String(J.puntos)){p.textContent=J.puntos;reanimar(p,"salta")}
+  const m=mult();
+  $("mult").textContent="x"+m;
+  pips.forEach((el,i)=>el.classList.toggle("on",m>=5||i<J.combo%5));
+  $("nivel").textContent=J.nivel;
+}
+function hudTiempo(){
+  const s=Math.max(0,Math.ceil(J.restante/1000)),urg=J.estado==="jugando"&&J.restante<=5000;
+  $("tiempo").textContent=s;
+  $("relleno").style.transform=`scaleX(${Math.max(0,Math.min(1,J.restante/TOTAL))})`;
+  $("stat-tiempo").classList.toggle("urgente",urg);
+  $("barra").classList.toggle("urgente-barra",urg);
+  if(J.estado==="jugando"&&s!==J.ultimoSeg){J.ultimoSeg=s;if(s<=5&&s>0)sonar("tic")}
+}
+function panel(cual){
+  aviso.hidden=!cual;
+  for(const p of aviso.querySelectorAll(".p"))p.hidden=p.dataset.p!==cual;
+  if(cual){const b=aviso.querySelector(`[data-p="${cual}"] .boton`);if(b&&!b.disabled)b.focus({preventScroll:true})}
+}
+
+/* ---------- Reglas ---------- */
+function sumarTiempo(ms){J.restante=Math.min(TOTAL,J.restante+ms)}
+function romperCombo(){if(J.combo>=5)flotante("Combo perdido",{x:campo.clientWidth/2,y:40},"mal chico");J.combo=0}
+function subirNivel(n){
+  J.nivel=n;
+  const extra=MENSAJE_NIVEL[n]?`<small>${MENSAJE_NIVEL[n]}</small>`:"";
+  flotante(`¡Nivel ${n}!${extra}`,{x:campo.clientWidth/2,y:campo.clientHeight/2},"banner");
+  sonar("nivel");anunciar("Nivel "+n);
+}
+function tocar(e){
+  if(!ents.has(e))return;
+  const c=centro(e);
+  if(e.tipo==="mapache"||e.tipo==="dorado"){
+    const antes=mult();J.combo++;J.comboMax=Math.max(J.comboMax,J.combo);
+    const m=mult(),rapido=J.t-e.nace<500,dorado=e.tipo==="dorado";
+    const pts=(dorado?50:10)*m+(rapido?5:0);
+    J.puntos+=pts;J.atrapados++;
+    flotante("+"+pts+(rapido?" ⚡":""),c,dorado?"oro":"");
+    if(dorado){J.dorados++;sumarTiempo(2000);flotante("+2s",{x:c.x,y:c.y+34},"tiempo chico");sonar("dorado");chispas(c,"oro")}
+    else{sonar("golpe",J.combo);chispas(c)}
+    if(m>antes){flotante("¡Combo x"+m+"!",{x:c.x,y:c.y-44},"combo");sonar("combo")}
+    J.ultimo=c;quitar(e,"atrapado");J.proxMapache=J.t+90;
+    const n=Math.min(NIVEL_MAX,1+Math.floor(J.atrapados/POR_NIVEL));
+    if(n>J.nivel)subirNivel(n);
+  }else if(e.tipo==="zorrillo"){
+    J.zorrillos++;romperCombo();J.restante-=3000;
+    flotante("−3s ¡Puaj!",c,"mal");nube(c);sonar("zorrillo");temblar();vibrar(80);quitar(e,"atrapado");
+  }else{
+    J.relojes++;sumarTiempo(3000);flotante("+3s",c,"tiempo");sonar("reloj");chispas(c,"azul");quitar(e,"atrapado");
+  }
+  hud();hudTiempo();
+}
+function fallar(x,y){
+  J.fallos++;romperCombo();
+  flotante("¡Fallo!",{x,y},"mal chico");sonar("fallo");temblar();vibrar(30);hud();
+}
+function expirar(e){
+  if(e.tipo==="mapache"||e.tipo==="dorado"){
+    const c=centro(e);J.escapes++;romperCombo();J.ultimo=c;
+    flotante(e.tipo==="dorado"?"¡Se fue el dorado!":"¡Se escapó!",c,"mal chico");
+    sonar("escapa");quitar(e,"huye");J.proxMapache=J.t+80;hud();
+  }else quitar(e,"desvanece");
+}
+function actualizar(dt){
+  const W=zona.clientWidth,H=zona.clientHeight;
+  for(const e of [...ents]){
+    e.x+=e.vx*dt/1000;e.y+=e.vy*dt/1000;
+    const maxX=Math.max(0,W-e.tam),maxY=Math.max(0,H-e.tam);
+    if(e.x<0){e.x=0;e.vx=Math.abs(e.vx)}else if(e.x>maxX){e.x=maxX;e.vx=-Math.abs(e.vx)}
+    if(e.y<0){e.y=0;e.vy=Math.abs(e.vy)}else if(e.y>maxY){e.y=maxY;e.vy=-Math.abs(e.vy)}
+    const r=1-(J.t-e.nace)/e.vida;
+    e.el.style.transform=`translate(${e.x}px,${e.y}px)`;
+    e.el.style.setProperty("--t",Math.max(0,r).toFixed(3));
+    e.el.classList.toggle("nervioso",r<.3);
+    if(r<=0)expirar(e);
+  }
+}
+function programar(){
+  const hay={};
+  for(const e of ents)hay[e.tipo==="dorado"?"mapache":e.tipo]=true;
+  if(!hay.mapache&&J.t>=J.proxMapache)nuevoMapache();
+  if(J.nivel>=2&&!hay.zorrillo&&J.t>=J.proxZorrillo){
+    crear("zorrillo",azar(1400,2200),tamMapache(J.nivel));
+    J.proxZorrillo=J.t+Math.max(1200,azar(2600,4600)-J.nivel*180);
+  }
+  if(!hay.reloj&&J.t>=J.proxReloj){
+    crear("reloj",1500,Math.max(44,tamMapache(J.nivel)-6));
+    J.proxReloj=J.t+azar(9000,13000);
+  }
+}
+function bucle(ahora){
+  if(J.estado!=="jugando"&&J.estado!=="pausa")return;
+  const dt=Math.min(100,ahora-J.ultimoFrame);J.ultimoFrame=ahora;
+  if(J.estado==="jugando"){
+    J.t+=dt;J.restante-=dt;
+    actualizar(dt);programar();hudTiempo();
+    if(J.restante<=0){fin();return}
+  }
+  requestAnimationFrame(bucle);
+}
+
+/* ---------- Flujo de partida ---------- */
+function empezar(ev){
+  if(J.estado==="cuenta"||J.estado==="jugando"||J.estado==="pausa")return;
+  audio();
+  clearTimeout(J.temp);limpiar();
+  Object.assign(J,{puntos:0,atrapados:0,fallos:0,escapes:0,zorrillos:0,dorados:0,relojes:0,combo:0,comboMax:0,nivel:1,
+    t:0,restante:TOTAL,ultimo:null,ultimoSeg:99,proxMapache:0,proxZorrillo:azar(1500,3000),proxReloj:azar(8000,11000),
+    teclado:!!ev&&ev.detail===0});
+  J.estado="cuenta";
+  hud();hudTiempo();decorar();panel(null);
+  let n=3;
+  const paso=()=>{
+    if(J.estado!=="cuenta")return;
+    cuenta.hidden=false;cuenta.textContent=n>0?n:"¡Ya!";reanimar(cuenta,"late");
+    sonar(n>0?"cuenta":"ya");
+    if(n>0){n--;J.temp=setTimeout(paso,600)}else J.temp=setTimeout(arrancar,380);
+  };
+  paso();
+}
+function arrancar(){
+  cuenta.hidden=true;J.estado="jugando";campo.classList.add("en-juego");
+  $("pausa").disabled=false;J.ultimoFrame=performance.now();
+  requestAnimationFrame(bucle);
+  if(document.hidden)pausar();
+}
+function pausar(){
+  if(J.estado!=="jugando")return;
+  J.estado="pausa";campo.classList.add("pausado");
+  $("pausa").textContent="▶";$("pausa").setAttribute("aria-label","Seguir");
+  panel("pausa");
+}
+function reanudar(){
+  if(J.estado!=="pausa")return;
+  J.estado="jugando";campo.classList.remove("pausado");
+  $("pausa").textContent="⏸";$("pausa").setAttribute("aria-label","Pausar");
+  panel(null);J.ultimoFrame=performance.now();
+  if(J.teclado){const e=[...ents].find(e=>e.tipo==="mapache"||e.tipo==="dorado");e&&e.el.focus({preventScroll:true})}
+}
+function fin(){
+  J.estado="fin";J.restante=0;limpiar();hudTiempo();
+  campo.classList.remove("en-juego","pausado");$("pausa").disabled=true;
+  const nuevo=J.puntos>record;
+  if(nuevo){record=J.puntos;guardar("mapache.record",record)}
+  const intentos=J.atrapados+J.fallos+J.zorrillos;
+  $("f-puntos").textContent=J.puntos;
+  $("f-rango").textContent=RANGOS.find(([min])=>J.puntos>=min)[1];
+  $("f-atrapados").textContent=J.atrapados;
+  $("f-precision").textContent=(intentos?Math.round(J.atrapados/intentos*100):0)+"%";
+  $("f-combo").textContent=J.comboMax;
+  $("f-nivel").textContent=J.nivel;
+  $("f-detalle").textContent=`🦝✨ ${J.dorados} · ⏱️ ${J.relojes} · 💨 ${J.escapes} escapes · 🦨 ${J.zorrillos}`;
+  $("f-sello").hidden=!nuevo;
+  $("f-record").textContent=nuevo?"Superaste tu marca anterior.":"Tu récord: "+record+" puntos";
+  sonar(nuevo?"record":"fin");if(nuevo)confeti();
+  const b=$("otra");b.disabled=true;panel("fin");
+  setTimeout(()=>{b.disabled=false;if(J.estado==="fin")b.focus({preventScroll:true})},700);
+  anunciar(`Fin del juego. ${J.puntos} puntos, ${J.atrapados} mapaches.`);
+  pintarRecord();
+}
+function pintarRecord(){$("i-record").textContent=record?"Tu récord: "+record+" puntos":"Aún no tienes récord. ¡Estrénalo!"}
+
+/* ---------- Entrada ---------- */
+zona.addEventListener("pointerdown",ev=>{
+  if(J.estado!=="jugando")return;
+  ev.preventDefault();
+  const el=ev.target.closest(".ent"),e=el&&porEl.get(el);
+  if(e&&ents.has(e)){J.teclado=false;tocar(e);return}
+  const r=zona.getBoundingClientRect();
+  fallar(ev.clientX-r.left,ev.clientY-r.top);
+});
+zona.addEventListener("keydown",ev=>{
+  if((ev.key!=="Enter"&&ev.key!==" ")||ev.repeat||J.estado!=="jugando")return;
+  const el=ev.target.closest(".ent"),e=el&&porEl.get(el);
+  if(e){ev.preventDefault();J.teclado=true;tocar(e)}
+});
+zona.addEventListener("contextmenu",ev=>ev.preventDefault());
+document.addEventListener("keydown",ev=>{
+  if(ev.key==="p"||ev.key==="P"||ev.key==="Escape"){
+    if(J.estado==="jugando")pausar();else if(J.estado==="pausa")reanudar();
+  }
+});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)pausar()});
+window.addEventListener("blur",pausar);
+$("jugar").addEventListener("click",empezar);
+$("otra").addEventListener("click",empezar);
+$("seguir").addEventListener("click",reanudar);
+$("pausa").addEventListener("click",()=>J.estado==="pausa"?reanudar():pausar());
+$("sonido").addEventListener("click",()=>{sonidoOn=!sonidoOn;guardar("mapache.sonido",sonidoOn?"1":"0");pintarSonido();if(sonidoOn)sonar("combo")});
+
+pintarSonido();pintarRecord();hud();hudTiempo();decorar();panel("inicio");
+</script>
+</body>
+</html>
